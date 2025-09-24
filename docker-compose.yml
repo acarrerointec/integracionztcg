@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=192.168.10.38  # IP de la VM
+      - DB_PORT=3306
+      - DB_NAME=flinkdb
+      - DB_USER=flinkuser
+      - DB_PASSWORD=Nueva123
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:8080"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+    

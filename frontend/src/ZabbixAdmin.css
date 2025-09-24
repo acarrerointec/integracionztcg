@@ -1,0 +1,16 @@
+.zabbix-admin-app {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.main-content {
+  margin-top: 76px; /* Altura del NavBar */
+  min-height: calc(100vh - 76px);
+}
+
+@media (max-width: 992px) {
+  .main-content {
+    margin-top: 56px; /* Altura reducida del NavBar en mobile */
+    min-height: calc(100vh - 56px);
+  }
+}
