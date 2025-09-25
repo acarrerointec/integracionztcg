@@ -2,15 +2,19 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copiar package.json e instalar dependencias
+# Copiar solo los archivos de dependencias primero (para mejor cache)
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production
 
-# Copiar el código fuente
+# Copiar el resto del código
 COPY . .
 
-# Exponer puerto
-EXPOSE 3000
+# Crear usuario no-root para seguridad
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
-# Comando para iniciar la aplicación
-CMD ["npm", "run", "dev"]
+EXPOSE 3000
+# o el nombre de tu archivo principal
+CMD ["node", "server.js"]  

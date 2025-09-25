@@ -1,30 +1,46 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
     ports:
       - "3000:3000"
     environment:
-      - DB_HOST=192.168.10.38  # IP de la VM
+      - DB_HOST=mysql
       - DB_PORT=3306
       - DB_NAME=flinkdb
       - DB_USER=flinkuser
       - DB_PASSWORD=Nueva123
+    depends_on:
+      - mysql
     networks:
       - app-network
 
   frontend:
     build: ./frontend
     ports:
-      - "80:8080"
+      - "80:80"
     depends_on:
       - backend
     networks:
       - app-network
 
+  mysql:
+    image: docker.io/mysql:8.0  # ← CAMBIO IMPORTANTE
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "r0c$$t4r#00*"
+      MYSQL_DATABASE: "flinkdb"
+      MYSQL_USER: "flinkuser"
+      MYSQL_PASSWORD: "Nueva123"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+
 networks:
   app-network:
     driver: bridge
-
-    
