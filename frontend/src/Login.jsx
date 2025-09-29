@@ -38,7 +38,7 @@ const Login = () => {
             <div className="text-center mb-4">
              
               <h1 className="mb-1 fw-bold">Bienvenidos</h1>
-              <h2 className="mb-3 fw-bold">Integracion Zabbix</h2>
+              <h2 className="mb-3 fw-bold"></h2>
               <p className="text-muted">Ingresa tus credenciales para continuar</p>
             </div>
 

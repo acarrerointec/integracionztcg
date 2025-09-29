@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Save, X, AlertCircle, 
   CheckCircle, Activity, FileText, Server, Monitor, Ticket,
-  Filter, Search, Calendar, Clock
+  Filter, Search, Calendar, Clock, ChevronLeft, ChevronRight,
+  Calendar as CalendarIcon, Table, Grid
 } from 'lucide-react';
 
 const TicketManager = () => {
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
+  const [allTickets, setAllTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -16,8 +18,11 @@ const TicketManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
- // 🔥 NUEVO: Estado para paginación
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -25,21 +30,149 @@ const TicketManager = () => {
     totalPages: 0
   });
 
-
-  // API Configuration - Conectando a tu MySQL
   const API_BASE_URL = 'http://localhost:3005/api';
 
-
-  // Form data adaptado a tu estructura de BD
   const [formData, setFormData] = useState({
     subject: '',
     message: '',
     created_at: new Date().toISOString().slice(0, 16).replace('T', ' ')
   });
 
+  // 🔥 FUNCIONES AUXILIARES MEJORADAS
+  const formatDateToInput = (date) => {
+    return date.toISOString().split('T')[0];
+  };
 
+  const getDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-// 🔥 MODIFICADO: Cargar tickets con paginación
+    switch (dateFilter) {
+      case 'today':
+        return {
+          start: today,
+          end: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+        };
+      case 'yesterday':
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return {
+          start: yesterday,
+          end: today
+        };
+      case 'thisWeek':
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        return {
+          start: startOfWeek,
+          end: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+        };
+      case 'lastWeek':
+        const startOfLastWeek = new Date(today);
+        startOfLastWeek.setDate(today.getDate() - today.getDay() - 7);
+        const endOfLastWeek = new Date(startOfLastWeek);
+        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
+        return {
+          start: startOfLastWeek,
+          end: new Date(endOfLastWeek.getTime() + 24 * 60 * 60 * 1000)
+        };
+      case 'thisMonth':
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        return {
+          start: startOfMonth,
+          end: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+        };
+      case 'lastMonth':
+        const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        return {
+          start: startOfLastMonth,
+          end: new Date(endOfLastMonth.getTime() + 24 * 60 * 60 * 1000)
+        };
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          return {
+            start: new Date(customStartDate),
+            end: new Date(new Date(customEndDate).getTime() + 24 * 60 * 60 * 1000)
+          };
+        }
+        return { start: null, end: null };
+      case 'all':
+      default:
+        return { start: null, end: null };
+    }
+  };
+
+  const applyDateFilter = (ticketList) => {
+    if (dateFilter === 'all') {
+      return ticketList;
+    }
+
+    const dateRange = getDateRange();
+    if (!dateRange.start) return ticketList;
+
+    return ticketList.filter(ticket => {
+      const ticketDate = new Date(ticket.created_at);
+      return ticketDate >= dateRange.start && ticketDate < dateRange.end;
+    });
+  };
+
+  const getDateFilterText = () => {
+    const dateRange = getDateRange();
+    
+    switch (dateFilter) {
+      case 'today': return `Hoy (${formatDateToInput(dateRange.start)})`;
+      case 'yesterday': return `Ayer (${formatDateToInput(dateRange.start)})`;
+      case 'thisWeek': return 'Esta semana';
+      case 'lastWeek': return 'Semana pasada';
+      case 'thisMonth': return 'Este mes';
+      case 'lastMonth': return 'Mes pasado';
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          return `Personalizado (${customStartDate} a ${customEndDate})`;
+        }
+        return 'Personalizado';
+      case 'all': return 'Todos los tiempos';
+      default: return 'Seleccionar fecha';
+    }
+  };
+
+  const applyAllFilters = () => {
+    let filtered = [...allTickets];
+    
+    filtered = applyDateFilter(filtered);
+    
+    if (searchTerm) {
+      filtered = filtered.filter(ticket =>
+        ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.id?.toString().includes(searchTerm)
+      );
+    }
+    
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(ticket => {
+        const message = ticket.message?.toLowerCase() || '';
+        if (typeFilter === 'resolved') return message.includes('resolved');
+        if (typeFilter === 'started') return message.includes('started');
+        return true;
+      });
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(ticket => {
+        const status = getStatusFromMessage(ticket.message);
+        if (statusFilter === 'open') return status === 'Open';
+        if (statusFilter === 'progress') return status === 'In Progress';
+        if (statusFilter === 'resolved') return status === 'Resolved';
+        return true;
+      });
+    }
+    
+    setFilteredTickets(filtered);
+  };
+
+  // 🔥 EFFECTS MEJORADOS
   useEffect(() => {
     const fetchTickets = async () => {
       try {
@@ -48,14 +181,13 @@ const TicketManager = () => {
           `${API_BASE_URL}/tickets?page=${pagination.page}&limit=${pagination.limit}`
         );
         
-        if (!response.ok) {
-          throw new Error('Error al cargar los tickets');
-        }
+        if (!response.ok) throw new Error('Error al cargar los tickets');
         
         const data = await response.json();
         
         if (data.success) {
           setTickets(data.data);
+          setAllTickets(data.data);
           setFilteredTickets(data.data);
           setPagination(prev => ({
             ...prev,
@@ -69,7 +201,6 @@ const TicketManager = () => {
         console.error('Error:', error);
         setError(error.message);
         
-        // Datos de ejemplo como fallback
         const fallbackData = [
           {
             id: 1,
@@ -85,6 +216,7 @@ const TicketManager = () => {
           }
         ];
         setTickets(fallbackData);
+        setAllTickets(fallbackData);
         setFilteredTickets(fallbackData);
       } finally {
         setLoading(false);
@@ -92,10 +224,41 @@ const TicketManager = () => {
     };
 
     fetchTickets();
-  }, [pagination.page, pagination.limit]); // 🔥 Recargar cuando cambie la página
+  }, [pagination.page, pagination.limit]);
 
+  useEffect(() => {
+    applyAllFilters();
+  }, [allTickets, searchTerm, typeFilter, statusFilter, dateFilter, customStartDate, customEndDate]);
 
-  // 🔥 NUEVO: Funciones de paginación
+  useEffect(() => {
+    const today = formatDateToInput(new Date());
+    setCustomStartDate(today);
+    setCustomEndDate(today);
+  }, []);
+
+  useEffect(() => {
+    if (filteredTickets.length > 0) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [pagination.page]);
+
+  useEffect(() => {
+    const filters = { searchTerm, typeFilter, statusFilter, dateFilter };
+    localStorage.setItem('ticketManagerFilters', JSON.stringify(filters));
+  }, [searchTerm, typeFilter, statusFilter, dateFilter]);
+
+  useEffect(() => {
+    const savedFilters = localStorage.getItem('ticketManagerFilters');
+    if (savedFilters) {
+      const filters = JSON.parse(savedFilters);
+      setSearchTerm(filters.searchTerm || '');
+      setTypeFilter(filters.typeFilter || 'all');
+      setStatusFilter(filters.statusFilter || 'all');
+      setDateFilter(filters.dateFilter || 'all');
+    }
+  }, []);
+
+  // 🔥 FUNCIONES PRINCIPALES
   const nextPage = () => {
     if (pagination.page < pagination.totalPages) {
       setPagination(prev => ({ ...prev, page: prev.page + 1 }));
@@ -114,34 +277,6 @@ const TicketManager = () => {
     }
   };
 
-// 🔥 MODIFICADO: Aplicar filtros solo a los datos actuales
-  useEffect(() => {
-    let filtered = [...tickets];
-    
-    if (searchTerm) {
-      filtered = filtered.filter(ticket =>
-        ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.message?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(ticket => {
-        const message = ticket.message?.toLowerCase() || '';
-        if (typeFilter === 'resolved') {
-          return message.includes('resolved');
-        } else if (typeFilter === 'started') {
-          return message.includes('started');
-        }
-        return true;
-      });
-    }
-    
-    setFilteredTickets(filtered);
-  }, [tickets, searchTerm, typeFilter]);
-
-
-  // Manejar cambios en el formulario
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -150,7 +285,6 @@ const TicketManager = () => {
     }));
   };
 
-  // Resetear formulario
   const resetForm = () => {
     setFormData({
       subject: '',
@@ -161,13 +295,11 @@ const TicketManager = () => {
     setShowForm(false);
   };
 
-  // Crear nuevo ticket
   const handleCreateTicket = () => {
     resetForm();
     setShowForm(true);
   };
 
-  // Editar ticket existente
   const handleEditTicket = (ticket) => {
     setFormData({
       subject: ticket.subject,
@@ -178,7 +310,6 @@ const TicketManager = () => {
     setShowForm(true);
   };
 
-  // Enviar formulario (crear o actualizar)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -210,12 +341,12 @@ const TicketManager = () => {
       }
       
       if (result.success) {
-        // Recargar tickets después de guardar
         const ticketsResponse = await fetch(`${API_BASE_URL}/tickets`);
         const ticketsData = await ticketsResponse.json();
         
         if (ticketsData.success) {
           setTickets(ticketsData.data);
+          setAllTickets(ticketsData.data);
         }
         
         resetForm();
@@ -230,7 +361,6 @@ const TicketManager = () => {
     }
   };
 
-  // Eliminar ticket
   const handleDeleteTicket = async (id) => {
     try {
       setLoading(true);
@@ -246,6 +376,7 @@ const TicketManager = () => {
       
       if (result.success) {
         setTickets(prev => prev.filter(ticket => ticket.id !== id));
+        setAllTickets(prev => prev.filter(ticket => ticket.id !== id));
         setDeleteConfirm(null);
         alert('Ticket eliminado correctamente');
       }
@@ -258,7 +389,7 @@ const TicketManager = () => {
     }
   };
 
-  // Analizar el estado basado en el mensaje
+  // 🔥 FUNCIONES DE PRESENTACIÓN MEJORADAS
   const getStatusFromMessage = (message) => {
     if (!message) return 'Unknown';
     if (message.toLowerCase().includes('resolved')) return 'Resolved';
@@ -266,7 +397,6 @@ const TicketManager = () => {
     return 'Open';
   };
 
-  // Obtener clase CSS para estado
   const getStatusClass = (status) => {
     switch (status) {
       case 'Resolved': return 'text-success';
@@ -276,7 +406,33 @@ const TicketManager = () => {
     }
   };
 
-  // Extraer plataforma del subject
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'Resolved': return 'bg-success';
+      case 'In Progress': return 'bg-warning';
+      case 'Open': return 'bg-danger';
+      default: return 'bg-secondary';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'Resolved': return '✅';
+      case 'In Progress': return '🔄';
+      case 'Open': return '⚠️';
+      default: return '📋';
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Resolved': return 'success';
+      case 'In Progress': return 'warning';
+      case 'Open': return 'danger';
+      default: return 'secondary';
+    }
+  };
+
   const getPlatformFromSubject = (subject) => {
     if (!subject) return 'Unknown';
     if (subject.includes('GPU')) return 'Platform';
@@ -285,7 +441,6 @@ const TicketManager = () => {
     return 'General';
   };
 
-  // Obtener badge color para plataforma
   const getPlatformBadge = (platform) => {
     switch (platform) {
       case 'Start': return 'bg-primary';
@@ -295,7 +450,6 @@ const TicketManager = () => {
     }
   };
 
-  // Formatear fecha
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('es-ES', {
       day: '2-digit',
@@ -306,7 +460,6 @@ const TicketManager = () => {
     });
   };
 
-  // Extraer información del mensaje
   const extractMessageInfo = (message) => {
     if (!message) return { type: 'Unknown', time: '' };
     
@@ -320,9 +473,8 @@ const TicketManager = () => {
     return { type: 'Problem', time: '' };
   };
 
-  // 🔥 NUEVO: Componente de paginación
-
-const PaginationControls = () => {
+  // 🔥 COMPONENTE DE PAGINACIÓN MEJORADO
+  const PaginationControls = () => {
     const maxPagesToShow = 5;
     const startPage = Math.max(1, pagination.page - Math.floor(maxPagesToShow / 2));
     const endPage = Math.min(pagination.totalPages, startPage + maxPagesToShow - 1);
@@ -333,41 +485,47 @@ const PaginationControls = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center mt-3">
+      <div className="d-flex justify-content-between align-items-center p-3 bg-light rounded">
         <div>
           <small className="text-muted">
-            Mostrando {(pagination.page - 1) * pagination.limit + 1} -{' '}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
-            {pagination.total.toLocaleString()} tickets
+            📊 Mostrando <strong>{(pagination.page - 1) * pagination.limit + 1}</strong> -{' '}
+            <strong>{Math.min(pagination.page * pagination.limit, pagination.total)}</strong> de{' '}
+            <strong>{pagination.total.toLocaleString()}</strong> tickets
           </small>
         </div>
         
-        <div className="d-flex gap-1">
+        <div className="d-flex align-items-center gap-2">
           <button
-            className="btn btn-outline-primary btn-sm"
+            className="btn btn-outline-primary btn-sm rounded-pill"
             onClick={prevPage}
             disabled={pagination.page === 1 || loading}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
+            Anterior
           </button>
           
-          {pageNumbers.map(page => (
-            <button
-              key={page}
-              className={`btn btn-sm ${pagination.page === page ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => goToPage(page)}
-              disabled={loading}
-            >
-              {page}
-            </button>
-          ))}
+          <div className="d-flex gap-1">
+            {pageNumbers.map(page => (
+              <button
+                key={page}
+                className={`btn btn-sm rounded-pill ${
+                  pagination.page === page ? 'btn-primary' : 'btn-outline-primary'
+                }`}
+                onClick={() => goToPage(page)}
+                disabled={loading}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
           
           <button
-            className="btn btn-outline-primary btn-sm"
+            className="btn btn-outline-primary btn-sm rounded-pill"
             onClick={nextPage}
             disabled={pagination.page === pagination.totalPages || loading}
           >
-            <ChevronRight size={16} />
+            Siguiente
+            <ChevronRight size={14} />
           </button>
         </div>
         
@@ -381,91 +539,61 @@ const PaginationControls = () => {
               page: 1 
             }))}
           >
+            <option value="10">10 por página</option>
             <option value="20">20 por página</option>
             <option value="50">50 por página</option>
             <option value="100">100 por página</option>
-            <option value="200">200 por página</option>
           </select>
         </div>
       </div>
     );
   };
 
- return (
+  return (
     <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-      {/* Header */}
+      {/* 🔥 HEADER MEJORADO */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center">
-            <h1 className="h3 mb-0 d-flex align-items-center">
-              <Activity className="me-2" />
-              Gestión de Alertas/Tickets
-              {pagination.total > 0 && (
-                <span className="badge bg-secondary ms-2">
-                  {pagination.total.toLocaleString()} total
-                </span>
-              )}
-            </h1>
-            <button 
-              className="btn btn-primary d-flex align-items-center"
-              onClick={handleCreateTicket}
-              disabled={loading}
-            >
-              <Plus size={16} className="me-1" />
-              Nueva Alerta
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mostrar error si existe */}
-      {error && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="alert alert-danger d-flex align-items-center" role="alert">
-              <AlertCircle className="me-2" />
-              <div>{error}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filtros simplificados */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-header d-flex align-items-center">
-              <Filter className="me-2" size={20} />
-              <h6 className="mb-0">Filtros</h6>
-            </div>
-            <div className="card-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Búsqueda:</label>
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <Search size={16} />
-                    </span>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="Buscar en subject o message..."
-                      value={searchTerm} 
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+          <div className="card shadow-sm border-0">
+            <div className="card-body py-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center">
+                  <div className="bg-primary rounded-circle p-2 me-3">
+                    <Activity size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h1 className="h4 mb-0">Gestión de Alertas/Tickets</h1>
+                    <p className="text-muted mb-0 small">
+                      Sistema de monitoreo en tiempo real
+                      {loading && <span className="ms-2 badge bg-warning">Sincronizando...</span>}
+                    </p>
                   </div>
                 </div>
-                <div className="col-md-6">
-                  <label className="form-label">Tipo de Evento:</label>
-                  <select 
-                    className="form-select" 
-                    value={typeFilter} 
-                    onChange={(e) => setTypeFilter(e.target.value)}
+                
+                <div className="d-flex align-items-center gap-3">
+                  <div className="text-end">
+                    <div className="d-flex align-items-center gap-2">
+                      <div className={`badge bg-${loading ? 'warning' : 'success'} rounded-pill`}>
+                        <div className={`spinner-border spinner-border-sm me-1 ${loading ? '' : 'd-none'}`}></div>
+                        {loading ? 'Conectando...' : 'En línea'}
+                      </div>
+                      <small className="text-muted">
+                        {filteredTickets.length} de {allTickets.length} alertas
+                      </small>
+                    </div>
+                    <small className="text-muted">
+                      Actualizado: {new Date().toLocaleTimeString('es-ES')}
+                    </small>
+                  </div>
+                  
+                  <button 
+                    className="btn btn-primary d-flex align-items-center shadow"
+                    onClick={handleCreateTicket}
+                    disabled={loading}
                   >
-                    <option value="all">Todos</option>
-                    <option value="resolved">Resueltos</option>
-                    <option value="started">Iniciados</option>
-                  </select>
+                    <Plus size={16} className="me-1" />
+                    Nueva Alerta
+                  </button>
                 </div>
               </div>
             </div>
@@ -473,7 +601,222 @@ const PaginationControls = () => {
         </div>
       </div>
 
-      {/* Formulario de creación/edición */}
+      {/* 🔥 FILTROS MEJORADOS */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card shadow-sm border-0">
+            <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-3">
+              <h6 className="mb-0 d-flex align-items-center">
+                <Filter className="me-2" size={20} />
+                Filtros y Búsqueda
+              </h6>
+              <div className="d-flex align-items-center gap-2">
+                <button 
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setTypeFilter('all');
+                    setStatusFilter('all');
+                    setDateFilter('all');
+                    setCustomStartDate('');
+                    setCustomEndDate('');
+                  }}
+                >
+                  Limpiar Filtros
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => setShowDateFilter(!showDateFilter)}
+                >
+                  <CalendarIcon size={14} className="me-1" />
+                  {showDateFilter ? 'Ocultar' : 'Fechas'}
+                </button>
+              </div>
+            </div>
+            
+            <div className="card-body">
+              {/* Búsqueda rápida */}
+              <div className="row mb-3">
+                <div className="col-12">
+                  <label className="form-label d-flex align-items-center">
+                    <Search size={16} className="me-2" />
+                    Búsqueda rápida
+                  </label>
+                  <div className="input-group input-group-lg">
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Buscar en subject, mensaje o ID..."
+                      value={searchTerm} 
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    {searchTerm && (
+                      <button 
+                        className="btn btn-outline-secondary" 
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtros en línea */}
+              <div className="row g-3">
+                <div className="col-md-3">
+                  <label className="form-label">Tipo de Evento</label>
+                  <select 
+                    className="form-select" 
+                    value={typeFilter} 
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                  >
+                    <option value="all">📋 Todos los eventos</option>
+                    <option value="resolved">✅ Resueltos</option>
+                    <option value="started">🔄 En progreso</option>
+                  </select>
+                </div>
+                
+                <div className="col-md-3">
+                  <label className="form-label">Estado</label>
+                  <select 
+                    className="form-select" 
+                    value={statusFilter} 
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">📊 Todos los estados</option>
+                    <option value="open">🔴 Abiertos</option>
+                    <option value="progress">🟡 En progreso</option>
+                    <option value="resolved">🟢 Resueltos</option>
+                  </select>
+                </div>
+                
+                <div className="col-md-3">
+                  <label className="form-label">Ordenar por</label>
+                  <select className="form-select">
+                    <option value="newest">📅 Más recientes primero</option>
+                    <option value="oldest">📅 Más antiguos primero</option>
+                    <option value="priority">⚠️ Por prioridad</option>
+                  </select>
+                </div>
+
+                <div className="col-md-3">
+                  <label className="form-label">Items por página</label>
+                  <select 
+                    className="form-select"
+                    value={pagination.limit}
+                    onChange={(e) => setPagination(prev => ({ 
+                      ...prev, 
+                      limit: parseInt(e.target.value),
+                      page: 1 
+                    }))}
+                  >
+                    <option value="10">10 items</option>
+                    <option value="20">20 items</option>
+                    <option value="50">50 items</option>
+                    <option value="100">100 items</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Filtros de fecha expandibles */}
+              {showDateFilter && (
+                <div className="mt-4 p-3 bg-light rounded">
+                  <h6 className="d-flex align-items-center mb-3">
+                    <CalendarIcon className="me-2" size={16} />
+                    Filtro por Fecha
+                  </h6>
+                  
+                  <div className="row g-3 align-items-end">
+                    <div className="col-md-3">
+                      <label className="form-label">Rango predefinido</label>
+                      <select 
+                        className="form-select"
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                      >
+                        <option value="all">🗓️ Todos los tiempos</option>
+                        <option value="today">📅 Hoy</option>
+                        <option value="yesterday">📅 Ayer</option>
+                        <option value="thisWeek">📅 Esta semana</option>
+                        <option value="lastWeek">📅 Semana pasada</option>
+                        <option value="thisMonth">📅 Este mes</option>
+                        <option value="lastMonth">📅 Mes pasado</option>
+                        <option value="custom">⏰ Personalizado</option>
+                      </select>
+                    </div>
+
+                    {dateFilter === 'custom' && (
+                      <>
+                        <div className="col-md-3">
+                          <label className="form-label">Fecha inicio</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label">Fecha fin</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="col-md-3">
+                      <div className="d-grid">
+                        <button className="btn btn-primary" onClick={applyAllFilters}>
+                          <Filter size={14} className="me-1" />
+                          Aplicar Filtros
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Resumen de filtros activos */}
+                  <div className="mt-3">
+                    <div className="d-flex flex-wrap gap-2">
+                      {searchTerm && (
+                        <span className="badge bg-primary">
+                          Búsqueda: "{searchTerm}" 
+                          <X size={12} className="ms-1 cursor-pointer" onClick={() => setSearchTerm('')} />
+                        </span>
+                      )}
+                      {typeFilter !== 'all' && (
+                        <span className="badge bg-info">
+                          Tipo: {typeFilter === 'resolved' ? 'Resueltos' : 'Iniciados'}
+                          <X size={12} className="ms-1 cursor-pointer" onClick={() => setTypeFilter('all')} />
+                        </span>
+                      )}
+                      {statusFilter !== 'all' && (
+                        <span className="badge bg-warning">
+                          Estado: {statusFilter === 'open' ? 'Abiertos' : statusFilter === 'progress' ? 'En progreso' : 'Resueltos'}
+                          <X size={12} className="ms-1 cursor-pointer" onClick={() => setStatusFilter('all')} />
+                        </span>
+                      )}
+                      {dateFilter !== 'all' && (
+                        <span className="badge bg-success">
+                          Fecha: {getDateFilterText()}
+                          <X size={12} className="ms-1 cursor-pointer" onClick={() => setDateFilter('all')} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 🔥 FORMULARIO (se mantiene igual) */}
       {showForm && (
         <div className="row mb-4">
           <div className="col-12">
@@ -570,18 +913,33 @@ const PaginationControls = () => {
         </div>
       )}
 
-      {/* Lista de tickets/alertas */}
+      {/* 🔥 TABLA MEJORADA */}
       <div className="row">
         <div className="col-12">
           <div className="card shadow-sm">
             <div className="card-header d-flex justify-content-between align-items-center">
-              <h6 className="mb-0">
+              <div className="d-flex align-items-center">
                 <FileText className="me-2" size={20} />
-                Alertas ({filteredTickets.length})
-              </h6>
-              <small className="text-muted">
-                Mostrando {filteredTickets.length} de {tickets.length} alertas
-              </small>
+                <h6 className="mb-0">Lista de Alertas</h6>
+                <span className="badge bg-primary ms-2">{filteredTickets.length}</span>
+              </div>
+              
+              <div className="d-flex align-items-center gap-2">
+                <div className="btn-group btn-group-sm" role="group">
+                  <button type="button" className="btn btn-outline-primary active">
+                    <Table size={14} className="me-1" />
+                    Tabla
+                  </button>
+                  <button type="button" className="btn btn-outline-primary">
+                    <Grid size={14} className="me-1" />
+                    Tarjetas
+                  </button>
+                </div>
+                
+                <small className="text-muted">
+                  Mostrando {filteredTickets.length} de {allTickets.length} alertas
+                </small>
+              </div>
             </div>
             
             {loading && !showForm ? (
@@ -593,13 +951,28 @@ const PaginationControls = () => {
               </div>
             ) : filteredTickets.length === 0 ? (
               <div className="card-body text-center py-5">
-                <p className="text-muted">No hay alertas que coincidan con los filtros.</p>
+                <div className="text-muted mb-3">
+                  <Search size={48} className="opacity-25" />
+                  <h5 className="mt-2">No se encontraron alertas</h5>
+                  <p>No hay alertas que coincidan con los criterios de búsqueda actuales.</p>
+                </div>
                 <button 
                   className="btn btn-primary mt-2"
                   onClick={handleCreateTicket}
                 >
                   <Plus size={16} className="me-1" />
                   Crear Nueva Alerta
+                </button>
+                <button 
+                  className="btn btn-outline-secondary mt-2 ms-2"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setTypeFilter('all');
+                    setStatusFilter('all');
+                    setDateFilter('all');
+                  }}
+                >
+                  Limpiar filtros
                 </button>
               </div>
             ) : (
@@ -614,7 +987,6 @@ const PaginationControls = () => {
                         <th>Estado</th>
                         <th>Tipo</th>
                         <th>Mensaje</th>
-                        <th>Fecha Creación</th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
@@ -625,59 +997,80 @@ const PaginationControls = () => {
                         const messageInfo = extractMessageInfo(ticket.message);
                         
                         return (
-                          <tr key={ticket.id}>
+                          <tr key={ticket.id} className="align-middle">
                             <td>
-                              <code className="text-primary">#{ticket.id}</code>
-                            </td>
-                            <td>
-                              <div className="text-truncate" style={{ maxWidth: '200px' }} title={ticket.subject}>
-                                {ticket.subject}
+                              <div className="d-flex align-items-center">
+                                <div className={`bg-${getStatusColor(status)} rounded-circle p-1 me-2`}>
+                                  {getStatusIcon(status)}
+                                </div>
+                                <code className="text-primary fw-bold">#{ticket.id}</code>
                               </div>
                             </td>
+                            
                             <td>
-                              <span className={`badge ${getPlatformBadge(platform)}`}>
+                              <div className="d-flex flex-column">
+                                <span className="fw-semibold text-truncate" style={{ maxWidth: '250px' }} 
+                                      title={ticket.subject}>
+                                  {ticket.subject}
+                                </span>
+                                <small className="text-muted">
+                                  {formatDate(ticket.created_at)}
+                                </small>
+                              </div>
+                            </td>
+                            
+                            <td>
+                              <span className={`badge ${getPlatformBadge(platform)} rounded-pill`}>
+                                {platform === 'Start' ? '🏠 ' : platform === 'Platform' ? '🖥️ ' : '🚚 '}
                                 {platform}
                               </span>
                             </td>
+                            
                             <td>
                               <div className={`d-flex align-items-center ${getStatusClass(status)}`}>
-                                <CheckCircle size={16} className="me-1" />
-                                <span>{status}</span>
+                                <span className={`badge ${getStatusBadgeClass(status)} rounded-pill me-2`}>
+                                  {status === 'Resolved' ? '✅' : status === 'In Progress' ? '🔄' : '⚠️'}
+                                </span>
+                                <small className="fw-semibold">{status}</small>
                               </div>
                             </td>
+                            
                             <td>
-                              <small className="text-muted">{messageInfo.type}</small>
-                              {messageInfo.time && (
-                                <small className="d-block text-muted">Hora: {messageInfo.time}</small>
-                              )}
-                            </td>
-                            <td>
-                              <div className="text-truncate" style={{ maxWidth: '250px' }} title={ticket.message}>
-                                {ticket.message}
+                              <div className="d-flex flex-column">
+                                <span className="badge bg-secondary rounded-pill mb-1">{messageInfo.type}</span>
+                                {messageInfo.time && (
+                                  <small className="text-muted">
+                                    <Clock size={10} className="me-1" />
+                                    {messageInfo.time}
+                                  </small>
+                                )}
                               </div>
                             </td>
+                            
                             <td>
-                              <small className="text-muted">
-                                {formatDate(ticket.created_at)}
-                              </small>
+                              <div className="text-truncate" style={{ maxWidth: '200px' }} 
+                                  title={ticket.message}>
+                                <small>{ticket.message}</small>
+                              </div>
                             </td>
+                            
                             <td>
-                              <div className="d-flex gap-2">
+                              <div className="d-flex gap-1">
                                 <button
-                                  className="btn btn-sm btn-outline-primary"
+                                  className="btn btn-sm btn-outline-primary rounded-pill"
                                   onClick={() => handleEditTicket(ticket)}
                                   disabled={loading}
                                   title="Editar alerta"
                                 >
-                                  <Edit size={14} />
+                                  <Edit size={12} />
                                 </button>
                                 <button
-                                  className="btn btn-sm btn-outline-danger"
+                                  className="btn btn-sm btn-outline-danger rounded-pill"
                                   onClick={() => setDeleteConfirm(ticket.id)}
                                   disabled={loading}
                                   title="Eliminar alerta"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={12} />
                                 </button>
                               </div>
                             </td>
@@ -687,6 +1080,11 @@ const PaginationControls = () => {
                     </tbody>
                   </table>
                 </div>
+                
+                {/* Paginación */}
+                <div className="p-3">
+                  <PaginationControls />
+                </div>
               </div>
             )}
           </div>
@@ -695,7 +1093,7 @@ const PaginationControls = () => {
 
       {/* Modal de confirmación para eliminar */}
       {deleteConfirm && (
-        <div className="modal fade show" style={{ display: 'block' }} tabIndex="-1">
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
