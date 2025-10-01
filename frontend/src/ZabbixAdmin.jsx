@@ -11,6 +11,8 @@ import Json from './Json';
 import Dashboard from './Dashboard';
 import MessageViewer from './MessageViewer';
 import MessageDashboard from './MessageDashboard';
+import GrafanaChart from './GrafanaDashboard';
+import GrafanaDashboard from './GrafanaDashboard';
 
 // Importaciones de otros componentes (debes crearlos luego)
 // import Dashboard from './components/Dashboard';
@@ -43,6 +45,7 @@ const ZabbixAdmin = () => {
         return <div className="p-5 text-center"><h2>Monitoreo en construcción</h2></div>;
       case 'metricas':
       //return <Json />;
+      return <GrafanaDashboard/>;
         // return <Métricas />;
         //return <MessageDashboard />;
     return <div className="p-5 text-center"><h2>Métricas en construcción</h2></div>;

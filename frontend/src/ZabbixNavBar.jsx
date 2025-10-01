@@ -4,7 +4,6 @@ import {
   Nav,
   Container,
   Dropdown,
-  Button,
   Offcanvas,
   Badge,
   Tooltip,
@@ -28,12 +27,15 @@ import { useAuth } from './AuthContext';
 import PropTypes from 'prop-types';
 import './ZabbixNavBar.css';
 
-const ZabbixNavBar = ({ onSelectComponent, activeComponent, eventCount }) => {
+const ZabbixNavBar = ({
+  onSelectComponent,
+  activeComponent = 'dashboard',   // ✅ valor por defecto aquí
+  eventCount = 0                   // ✅ valor por defecto aquí
+}) => {
   const [showOffcanvas, setShowOffcanvas] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { currentUser, logout } = useAuth();
 
-  // Efecto para detectar scroll
   useEffect(() => {
     const handleScroll = () => {
       const isScrolled = window.scrollY > 10;
@@ -155,10 +157,7 @@ const ZabbixNavBar = ({ onSelectComponent, activeComponent, eventCount }) => {
             <Badge bg="primary" className="ms-2">v1</Badge>
           </Navbar.Brand>
 
-          <Navbar.Toggle 
-            aria-controls="basic-navbar-nav" 
-            className="d-lg-none"
-          >
+          <Navbar.Toggle aria-controls="basic-navbar-nav" className="d-lg-none">
             <List />
           </Navbar.Toggle>
 
@@ -256,10 +255,8 @@ const ZabbixNavBar = ({ onSelectComponent, activeComponent, eventCount }) => {
         </Container>
       </Navbar>
 
-      {/* Espacio para el navbar fixed */}
       <div style={{ height: '76px' }} />
 
-      {/* Offcanvas para mobile */}
       <Offcanvas 
         show={showOffcanvas} 
         onHide={() => setShowOffcanvas(false)} 
@@ -333,11 +330,6 @@ ZabbixNavBar.propTypes = {
   onSelectComponent: PropTypes.func.isRequired,
   activeComponent: PropTypes.string,
   eventCount: PropTypes.number
-};
-
-ZabbixNavBar.defaultProps = {
-  activeComponent: 'dashboard',
-  eventCount: 0
 };
 
 export default ZabbixNavBar;

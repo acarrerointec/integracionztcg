@@ -151,24 +151,7 @@ const MessageDashboard = () => {
         
         // Datos de ejemplo mejorados
         const sampleData = [
-          {
-            id: 1,
-            subject: 'Problem: RCS-207-NWC1216 GPU >= 95% por más de 45 minutos',
-            message: 'Problem started at 19:13:53 on 2025.09.26\nProblem name: RCS-207-NWC1216 GPU >= 95% por más de 45 minutos\nHost: RCS-207-NWC1216\nSeverity: Information\nOriginal problem ID: 11865562',
-            created_at: new Date().toISOString()
-          },
-          {
-            id: 2,
-            subject: 'High latency detected in delivery network',
-            message: 'Latency over 100ms for more than 5 minutes\nHost: delivery-server-01\nSeverity: Warning\nOriginal problem ID: 11865397',
-            created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-          },
-          {
-            id: 3,
-            subject: 'Disk space critical on storage server',
-            message: 'Disk usage over 95% on /dev/sda1\nHost: storage-server-01\nSeverity: Critical\nOriginal problem ID: 11865396',
-            created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
-          }
+          
         ].map(msg => ({
           ...msg,
           analysis: analyzeMessage(msg.message, msg.subject),
@@ -276,7 +259,7 @@ const MessageDashboard = () => {
   // 🔥 ESTADÍSTICAS GENERALES
   const generalStats = {
     total: filteredMessages.length,
-    open: filteredMessages.filter(m => m.analysis.status === 'resolved').length - filteredMessages.filter(m => m.analysis.status === 'in-progress').length,
+    open: filteredMessages.filter(m => m.analysis.status === 'in-progress').length - filteredMessages.filter(m => m.analysis.status === 'resolved').length,
     inProgress: filteredMessages.filter(m => m.analysis.status === 'in-progress').length,
     resolved: filteredMessages.filter(m => m.analysis.status === 'resolved').length,
     highPriority: filteredMessages.filter(m => m.analysis.priority === 'high').length,
